@@ -1,0 +1,138 @@
+# 磁盘-模板消息
+# -*- coding: utf-8 -*
+import socket
+import urllib,urllib2, json
+import time
+import os, time
+
+get_date = time.strftime("%Y-%m-%d", time.localtime())
+get_date_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+def get_host_ip():
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(('8.8.8.8', 80))
+        ip = s.getsockname()[0]
+    finally:
+        s.close()
+    return ip
+
+def disk_state():
+    """路径"""
+    st = os.statvfs("/")
+    free = (st.f_bavail * st.f_frsize)
+    total = (st.f_blocks * st.f_frsize)
+    used = (st.f_blocks - st.f_bfree) * st.f_frsize
+    disk_info_list = []
+    disk_info_dict = {}
+
+    # try:
+    #     percent = ret = (float(used) / total) * 100
+    # except ZeroDivisionError:
+    #     percent = 0
+    # 硬盘总量
+    disk_info_dict["total"] = total/ 1024 / 1024 / 1024
+    # 硬盘使用量
+    disk_info_dict["used"] = used/ 1024 / 1024 / 1024
+    # 硬盘剩余量
+    disk_info_dict["free"] = free/1024 / 1024 / 1024
+    ## 硬盘使用比
+    disk_info_dict["percent"] = ret = (float(used) / total) * 100
+
+    disk_info_list.append(disk_info_dict)
+    return disk_info_list
+
+def getToken():
+    url = "https://api.weixin.qq.com/cgi-bin/token"
+    word = {
+        'grant_type': 'client_credential',
+        'appid': '***', #微信公众号的appid
+        "secret": "***" #微信公众号后台查看
+    }
+    word = urllib.urlencode(word)  # 转换成url编码格式(字符串)
+    newurl = url + "?" + word
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/51.0.2704.103 Safari/537.36"}
+
+    request = urllib2.Request(newurl, headers=headers)
+    response = urllib2.urlopen(request)
+    res = response.read()  # 把结果通过.read()函数读取出来
+    info = json.loads(res)  # 把返回结果(string) 转换成json，方便处理
+    # print slave_info
+    # print info["access_token"]
+    return info["access_token"]
+
+
+def getGroupOpenid():
+    data = {"tagid": 100, "next_openid": ""}
+    url = "https://api.weixin.qq.com/cgi-bin/user/tag/get?access_token=%s" % getToken()
+    headers = {'content-type': 'application/json'}
+    req = urllib2.Request(url, json.dumps(data), headers)
+    response = urllib2.urlopen(req)
+    res = response.read()
+    result = json.loads(res)
+    return result["data"]["openid"]
+
+
+def sendTemplate():
+    users = getGroupOpenid()
+    url = "https://api.weixin.qq.com/cgi-bin/message/template/send?access_token=%s" % getToken()
+    headers = {'Content-Type': 'application/json;charset=UTF-8'}
+    otherStyleTime = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
+    for user in users:
+        data = {
+            "touser": user,
+            "template_id": "bbcLzAR9G3Z24JHhN3uRpMCdHpnsZgiwcsmydOZRRsI",
+            'data': {
+                'first': {
+                    'value': get_host_ip()+'-mshop-center磁盘不足提醒',
+                    'color': '#173177'
+                },
+                'keyword1': {
+                    'value': otherStyleTime,
+                    'color': '#173177'
+                },
+                'keyword2': {
+                    'value': get_host_ip()+"磁盘监控",
+                    'color': '#173177'
+                },
+                'keyword3': {
+                    'value': "磁盘使用率:%s%s"%(int(disk_state()[0]["percent"]),"%"),
+                    'color': '#173177'
+                },
+                'keyword4': {
+                    'value': '\r\n磁盘剩余量:%sG\r\n磁盘使用量:%sG\r\n磁盘总容量:%sG'%(disk_state()[0]["free"],disk_state()[0]["used"],disk_state()[0]["total"]),
+                    'color': '#173177'
+                },
+                # 'remark': {
+                #     'value': '点击查看报告详情 ↓',
+                #     'color': '#173177'
+                # },
+            }
+        }
+
+        req = urllib2.Request(url, json.dumps(data), headers)
+        response = urllib2.urlopen(req)
+        res = response.read()
+        result = json.loads(res)
+        # print(result)
+
+# 监控磁盘使用
+def monitor_disk():
+    percentss=int(disk_state()[0]["percent"])
+    send_time = int(time.strftime("%H"))
+    # 磁盘使用率
+    if percentss > 88:
+        if send_time<21 and send_time>8:
+            sendTemplate()
+
+def monitor():
+    while 1:
+        monitor_disk()
+        # 间隔3600秒避免提高cpu
+        time.sleep(3600)
+
+def main():
+    monitor()
+
+if __name__ == "__main__":
+    main()
