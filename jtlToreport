@@ -1,0 +1,84 @@
+# coding=utf-8
+
+import xmltodict
+import json, time
+
+newdata = []
+alldata = []
+success = []
+fail = []
+result = []
+
+
+def timeStamp(timeNum):
+    timeStamp = float(timeNum / 1000)
+    timeArray = time.localtime(timeStamp)
+    otherStyleTime = time.strftime("%Y-%m-%d %H:%M:%S", timeArray)
+    return otherStyleTime
+    # print (otherStyleTime)
+
+
+def xmlToJson():
+    f = open('member_front.jtl', encoding='utf-8')
+    xmlStr = f.read()
+
+    Dict = xmltodict.parse(xmlStr)
+    jsonStr = json.dumps(Dict, indent=1)
+    # print("jsonStr=", jsonStr)
+    dic = json.loads(jsonStr)
+
+
+    for i in range(0, len(dic["testResults"]["httpSample"])):
+        if dic["testResults"]["httpSample"][i]["@s"] == "true":
+            status = "成功"
+            success.append(status)
+        else:
+            status = "失败"
+            fail.append(status)
+        jsonDump = json.dumps(dic["testResults"]["httpSample"][i]["responseData"]['#text'], ensure_ascii=False)
+        jsonDump = jsonDump.replace("<", "").replace(">", "")
+        jsonDump = jsonDump.replace(r"\n", "").replace(r"\t", "").replace(r"\r", "")
+        # print(jsonDump)
+        # resultly=dic["testResults"]["httpSample"][i]["responseData"]['#text']
+        # print(dic["testResults"]["httpSample"][i])
+        data = {
+            "name": dic["testResults"]["httpSample"][i]["@tn"],
+            "className": dic["testResults"]["httpSample"][i]["@tn"],
+            "methodName": dic["testResults"]["httpSample"][i]["@lb"],
+            "description": "暂无",
+            "spendTime": dic["testResults"]["httpSample"][i]["@t"],
+            "status": status,
+            "beginTime": timeStamp(int(dic["testResults"]["httpSample"][i]["@ts"])),
+            "log": ["<B>请求方式/Url:</B><br>"+"<br><br><B>请求头:</B><br>" + dic["testResults"]["httpSample"][i]["requestHeader"]['#text']+"<br><br><B>响应信息:</B><br>" + jsonDump]
+        }
+
+        newdata.append(data)
+    # print(newdata)
+    alldata.append(
+        {
+            "testName": "会员联盟接口测试报告",
+            "testPass": len(success),
+            "testSkip": 0,
+            "totalTime": int(dic["testResults"]["httpSample"][0]["@ts"]) - int(
+                dic["testResults"]["httpSample"][0]["@ts"]),
+            "testAll": len(dic["testResults"]["httpSample"]),
+            "beginTime": timeStamp(int(dic["testResults"]["httpSample"][0]["@ts"])),
+            "testResult": newdata,
+            "testFail": len(fail)
+
+        })
+
+    # print(alldata)
+
+
+def repla():
+    xmlToJson()
+    lines = open('template', 'r', encoding='UTF-8').readlines()
+    with open('template_7.html', "w", encoding='utf-8') as fp:
+        for s in lines:
+            fp.write(s.replace('${resultData}', str(alldata[0])))
+    # print(json.dumps(data,indent=1,ensure_ascii=False))
+
+
+if __name__ == "__main__":
+    repla()
